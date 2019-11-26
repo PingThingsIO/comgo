@@ -6,7 +6,9 @@ import (
 	"errors"
 	"io"
 	"io/ioutil"
+	"log"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -14,8 +16,8 @@ import (
 
 const TimeFormat = "02/01/2006T15:04:05.000000"
 
-// New returns configuration parameters of COMTRADE files.
-func New() CFG {
+// NewCFG returns configuration parameters of COMTRADE files.
+func NewCFG() CFG {
 	return CFG{}
 }
 
@@ -51,6 +53,8 @@ type CFG struct {
 	TriggerTime     time.Time
 	DataFileType    string
 	TimeFactor      float64
+	TimeCode        string
+	LocalCode       string
 	DataFileContent []byte
 }
 
@@ -141,6 +145,67 @@ func (cfg *CFG) GetDataFileType() string {
 func (cfg *CFG) GetTimeFactor() float64 {
 	if cfg != nil {
 		return cfg.TimeFactor
+	}
+	return 0
+}
+
+func (cfg *CFG) GetTimeCode() string {
+	if cfg != nil {
+		return cfg.TimeCode
+	}
+	return ""
+}
+
+func (cfg *CFG) GetLocalCode() string {
+	if cfg != nil {
+		return cfg.LocalCode
+	}
+	return ""
+}
+
+func timeCodeToNS(code string) int64 {
+	var hours, minutes int
+	var ns int64
+	var err error
+
+	match, _ := regexp.MatchString(`([+-]\d+)[ht]?`, code)
+	if match {
+
+		// look for hour component
+		r, _ := regexp.Compile(`([+-]\d+)[ht]?`)
+		matches := r.FindStringSubmatch(code)
+		if len(matches) > 1 {
+			hours, err = strconv.Atoi(matches[1])
+			if err != nil {
+				log.Fatal("error parsing hour for time code")
+			}
+			ns = int64(int64(hours) * int64(1e9) * 60 * 60)
+		}
+
+		// look for minute component
+		r, _ = regexp.Compile(`[+-]\d+[ht](\d+)+`)
+		matches = r.FindStringSubmatch(code)
+		if len(matches) > 1 {
+			// fmt.Printf("matches: %v\n", matches)
+			minutes, err = strconv.Atoi(matches[1])
+			if err != nil {
+				log.Fatalf("error parsing hour for time code: %v", matches[1])
+			}
+			ns += int64(int64(minutes) * int64(1e9) * 60)
+		}
+
+	}
+	return ns
+}
+
+// GetTimeCodeOffset returns the time difference between local time and UTC in nanoseconds
+// sample formats: “+10h30”, "-4t", “-7h15”, "0"
+func (cfg *CFG) GetTimeCodeOffset() int64 {
+	if cfg != nil {
+		if cfg.TimeCode == "" {
+			return 0
+		}
+		return timeCodeToNS(cfg.TimeCode)
 	}
 	return 0
 }
@@ -530,6 +595,8 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 				chA.Secondary = append(chA.GetSecondary(), num)
 			}
 		}
+
+		// QUESTION: what about PS?
 	}
 
 	// Processing digit channels
@@ -598,7 +665,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	if start, err := time.Parse(TimeFormat, ByteToString(bytes.Join(tempList, []byte("T")))); err != nil {
 		return err
 	} else {
-		cfg.TriggerTime = start
+		cfg.StartTime = start
 	}
 
 	// Read trigger date and time ([dd,mm,yyyy,hh,mm,ss.ssssss])
@@ -606,7 +673,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	if trigger, err := time.Parse(TimeFormat, ByteToString(bytes.Join(tempList, []byte("T")))); err != nil {
 		return err
 	} else {
-		cfg.StartTime = trigger
+		cfg.TriggerTime = trigger
 	}
 
 	// Read dat content type
@@ -623,6 +690,16 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 		}
 	} else {
 		cfg.TimeFactor = 1
+	}
+
+	// Read time_code, local_code
+	optionalLineNum := 8 + cfg.GetSampleRateNum() + chA.GetChannelTotal() + chD.GetChannelTotal()
+	if len(lines) >= int(optionalLineNum) {
+		tempList = bytes.Split(lines[optionalLineNum], []byte(","))
+		if len(tempList) == 2 {
+			cfg.TimeCode = ByteToString(tempList[0])
+			cfg.LocalCode = ByteToString(tempList[1])
+		}
 	}
 
 	return nil
@@ -686,19 +763,11 @@ func (cfg *CFG) GetAnalogChannelData(num uint16) (result []float64, err error) {
 	// Number of samples: @TODO - only take 1 rate into account
 	// Reading the values from datFileContent string
 	for i := 0; i < sampleDetail[0].GetNumber(); i++ {
+
+		// get data from in memory file contents
 		s := dataFileContent[i*NB : i*NB+NB]
 
-		var data struct {
-			Sample int32
-			Stamp  int32
-		}
-
-		value := make([]int16, (NB-8)/2) // dynamic slice
-
-		err = binary.Read(bytes.NewReader(s[:8]), binary.LittleEndian, &data)
-		if err != nil {
-			return nil, err
-		}
+		value := make([]int16, (NB-8)/2)
 
 		err = binary.Read(bytes.NewReader(s[8:]), binary.LittleEndian, &value)
 		if err != nil {
