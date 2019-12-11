@@ -262,18 +262,19 @@ func (cfg *CFG) GetAnalogChannelNames() []string {
  * @Secondary: Secondary ratios
  */
 type ChannelA struct {
-	ChannelTotal      uint16
-	ChannelNumber     []uint16
-	ChannelNames      []string
-	ChannelPhases     []string
-	ChannelElements   []string
-	ChannelUnits      []string
-	ConversionFactors map[string][]float64
-	TimeFactors       []float64
-	ValueMin          []int
-	ValueMax          []int
-	Primary           []float64
-	Secondary         []float64
+	ChannelTotal           uint16
+	ChannelNumber          []uint16
+	ChannelNames           []string
+	ChannelPhases          []string
+	ChannelElements        []string
+	ChannelUnits           []string
+	ConversionFactors      map[string][]float64
+	TimeFactors            []float64
+	ValueMin               []int
+	ValueMax               []int
+	Primary                []float64
+	Secondary              []float64
+	IsSecondaryMeasurement []bool
 }
 
 func (m *ChannelA) GetChannelTotal() uint16 {
@@ -595,8 +596,13 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 				chA.Secondary = append(chA.GetSecondary(), num)
 			}
 		}
-
-		// QUESTION: what about PS?
+		if len(tempList) > 12 {
+			if strings.ToLower(ByteToString(tempList[12])) == "s" {
+				chA.IsSecondaryMeasurement = append(chA.IsSecondaryMeasurement, true)
+			} else {
+				chA.IsSecondaryMeasurement = append(chA.IsSecondaryMeasurement, false)
+			}
+		}
 	}
 
 	// Processing digit channels
