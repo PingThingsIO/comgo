@@ -623,6 +623,8 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 		if len(tempList) > 3 {
 			// Channel element (usually null)
 			chD.ChannelElements = append(chD.GetChannelElements(), ByteToString(tempList[3]))
+		} else {
+			chD.ChannelElements = append(chD.GetChannelElements(), "")
 		}
 		if len(tempList) > 4 {
 			if num, err := strconv.ParseUint(ByteToString(tempList[4]), 10, 8); err != nil {
@@ -630,6 +632,8 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 			} else {
 				chD.InitialState = append(chD.GetInitialState(), uint8(num))
 			}
+		} else {
+			chD.InitialState = append(chD.GetInitialState(), uint8(2))
 		}
 	}
 
