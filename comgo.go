@@ -650,10 +650,17 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	if num, err := strconv.ParseUint(ByteToString(tempList[0]), 10, 16); err != nil {
 		return err
 	} else {
-		cfg.SampleRateNum = uint16(num)
+		// Note: Setting the SampleRateNum to 0 when it is listed as such in the cfg file causes issues when we reference
+		// line numbers to get values that come after sample rate in the config. It's probably not ideal to list the incorrect
+		// sample rate number in our struct, but the comtrade importman only references it to check if it is <= 1
+		if uint16(num) == 0 {
+			cfg.SampleRateNum = uint16(1)
+		} else {
+			cfg.SampleRateNum = uint16(num)
+		}
 	}
 
-	// Read Sample number (@TODO only one sampling rate is taking into account)
+	// Read Sample number (@TODO only one sampling rate is taken into account)
 	for i := 0; i < int(cfg.GetSampleRateNum()); i++ {
 		sampleRate := SampleRate{}
 		tempList = bytes.Split(lines[4+i+int(chA.GetChannelTotal())+int(chD.GetChannelTotal())], []byte(","))
