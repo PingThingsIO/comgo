@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -490,7 +491,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	// Processing first line
 	tempList = bytes.Split(lines[0], []byte(","))
 	if len(tempList) < 2 {
-		return errors.New("cfg format error")
+		return errors.New("cfg format error: Missing info in first line of cfg file")
 	}
 	cfg.StationName = ByteToString(tempList[0])
 	cfg.RecordDeviceId = ByteToString(tempList[1])
@@ -506,7 +507,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	// Processing second line
 	tempList = bytes.Split(lines[1], []byte(","))
 	if len(tempList) < 3 {
-		return errors.New("cfg format error")
+		return errors.New("cfg format error: Missing info in second line of cfg file")
 	}
 	// Total channel number
 	if value, err := strconv.ParseUint(ByteToString(tempList[0]), 10, 16); err != nil {
@@ -516,7 +517,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	}
 
 	if !bytes.Contains(tempList[1], []byte("A")) || !bytes.Contains(tempList[2], []byte("D")) {
-		return errors.New("cfg format error")
+		return errors.New("cfg format error: Missing either analog or digital stream numbers in cfg file")
 	}
 
 	// Initialize analog and digit channels
@@ -542,7 +543,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	for i := 0; i < int(chA.GetChannelTotal()); i++ {
 		tempList = bytes.Split(lines[2+i], []byte(","))
 		if len(tempList) < 10 {
-			return errors.New("cfg format error")
+			return fmt.Errorf("cfg format error: missing info for analog channel %d", i)
 		}
 		if num, err := strconv.Atoi(ByteToString(tempList[0])); err != nil {
 			return err
@@ -609,7 +610,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	for i := 0; i < int(chD.GetChannelTotal()); i++ {
 		tempList = bytes.Split(lines[2+int(chA.GetChannelTotal())+i], []byte(","))
 		if len(tempList) < 3 {
-			return errors.New("cfg format error")
+			return fmt.Errorf("cfg format error: missing info for digit channel: %d", i)
 		}
 		if num, err := strconv.Atoi(ByteToString(tempList[0])); err != nil {
 			return err
