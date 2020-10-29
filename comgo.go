@@ -712,7 +712,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 
 	// Read time_code, local_code
 	optionalLineNum := 8 + cfg.GetSampleRateNum() + chA.GetChannelTotal() + chD.GetChannelTotal()
-	if len(lines) >= int(optionalLineNum) {
+	if len(lines) > int(optionalLineNum) {
 		tempList = bytes.Split(lines[optionalLineNum], []byte(","))
 		if len(tempList) == 2 {
 			cfg.TimeCode = ByteToString(tempList[0])
