@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -490,7 +491,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	// Processing first line
 	tempList = bytes.Split(lines[0], []byte(","))
 	if len(tempList) < 2 {
-		return errors.New("cfg format error")
+		return fmt.Errorf("cfg format error: Missing info in first line of cfg file. Line has %d parts", len(tempList))
 	}
 	cfg.StationName = ByteToString(tempList[0])
 	cfg.RecordDeviceId = ByteToString(tempList[1])
@@ -506,7 +507,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	// Processing second line
 	tempList = bytes.Split(lines[1], []byte(","))
 	if len(tempList) < 3 {
-		return errors.New("cfg format error")
+		return fmt.Errorf("cfg format error: Missing info in second line of cfg file. Line has %d parts", len(tempList))
 	}
 	// Total channel number
 	if value, err := strconv.ParseUint(ByteToString(tempList[0]), 10, 16); err != nil {
@@ -516,7 +517,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	}
 
 	if !bytes.Contains(tempList[1], []byte("A")) || !bytes.Contains(tempList[2], []byte("D")) {
-		return errors.New("cfg format error")
+		return fmt.Errorf("cfg format error: Missing either analog or digital stream numbers in cfg file")
 	}
 
 	// Initialize analog and digit channels
@@ -542,7 +543,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	for i := 0; i < int(chA.GetChannelTotal()); i++ {
 		tempList = bytes.Split(lines[2+i], []byte(","))
 		if len(tempList) < 10 {
-			return errors.New("cfg format error")
+			return fmt.Errorf("cfg format error: missing info for analog channel %d", i)
 		}
 		if num, err := strconv.Atoi(ByteToString(tempList[0])); err != nil {
 			return err
@@ -609,7 +610,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	for i := 0; i < int(chD.GetChannelTotal()); i++ {
 		tempList = bytes.Split(lines[2+int(chA.GetChannelTotal())+i], []byte(","))
 		if len(tempList) < 3 {
-			return errors.New("cfg format error")
+			return fmt.Errorf("cfg format error: missing info for digit channel: %d", i)
 		}
 		if num, err := strconv.Atoi(ByteToString(tempList[0])); err != nil {
 			return err
@@ -650,10 +651,17 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 	if num, err := strconv.ParseUint(ByteToString(tempList[0]), 10, 16); err != nil {
 		return err
 	} else {
-		cfg.SampleRateNum = uint16(num)
+		// Note: Setting the SampleRateNum to 0 when it is listed as such in the cfg file causes issues when we reference
+		// line numbers to get values that come after sample rate in the config. It's probably not ideal to list the incorrect
+		// sample rate number in our struct, but the comtrade importman only references it to check if it is <= 1
+		if uint16(num) == 0 {
+			cfg.SampleRateNum = uint16(1)
+		} else {
+			cfg.SampleRateNum = uint16(num)
+		}
 	}
 
-	// Read Sample number (@TODO only one sampling rate is taking into account)
+	// Read Sample number (@TODO only one sampling rate is taken into account)
 	for i := 0; i < int(cfg.GetSampleRateNum()); i++ {
 		sampleRate := SampleRate{}
 		tempList = bytes.Split(lines[4+i+int(chA.GetChannelTotal())+int(chD.GetChannelTotal())], []byte(","))
@@ -704,7 +712,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 
 	// Read time_code, local_code
 	optionalLineNum := 8 + cfg.GetSampleRateNum() + chA.GetChannelTotal() + chD.GetChannelTotal()
-	if len(lines) >= int(optionalLineNum) {
+	if len(lines) > int(optionalLineNum) {
 		tempList = bytes.Split(lines[optionalLineNum], []byte(","))
 		if len(tempList) == 2 {
 			cfg.TimeCode = ByteToString(tempList[0])
