@@ -629,7 +629,7 @@ func (cfg *CFG) ReadCFG(rd io.Reader) (err error) {
 		}
 		if len(tempList) > 4 {
 			if num, err := strconv.ParseUint(ByteToString(tempList[4]), 10, 8); err != nil {
-				return err
+				return fmt.Errorf("error parsing initial state: %v", err)
 			} else {
 				chD.InitialState = append(chD.GetInitialState(), uint8(num))
 			}
